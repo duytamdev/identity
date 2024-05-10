@@ -23,7 +23,8 @@ public class SecurityConfig {
             "/users",
             "/auth/login",
             "/auth/introspect",
-            "/auth/logout"
+            "/auth/logout",
+            "/auth/refresh-token"
     };
 
     @Value("${jwt.singerKey}")

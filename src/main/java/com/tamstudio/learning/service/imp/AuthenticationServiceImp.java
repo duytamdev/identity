@@ -8,6 +8,7 @@ import com.nimbusds.jwt.SignedJWT;
 import com.tamstudio.learning.dto.request.AuthenticationRequest;
 import com.tamstudio.learning.dto.request.IntrospectRequest;
 import com.tamstudio.learning.dto.request.LogoutRequest;
+import com.tamstudio.learning.dto.request.RefreshTokenRequest;
 import com.tamstudio.learning.dto.response.AuthenticationResponse;
 import com.tamstudio.learning.dto.response.IntrospectResponse;
 import com.tamstudio.learning.entity.InvalidatedToken;
@@ -144,5 +145,24 @@ public class AuthenticationServiceImp implements AuthenticationService {
 
 
        return signedJWT;
+    }
+
+    @Override
+    public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) throws ParseException, JOSEException {
+        var signedJWTToken = verifyToken(refreshTokenRequest.getToken());
+        var id = signedJWTToken.getJWTClaimsSet().getJWTID();
+        //logout
+        var expirationTime = signedJWTToken.getJWTClaimsSet().getExpirationTime();
+        InvalidatedToken invalidatedToken = new InvalidatedToken();
+        invalidatedToken.setId(id);
+        invalidatedToken.setExpiryDate(expirationTime);
+        invalidatedTokenRepository.save(invalidatedToken);
+        //generate new token
+        var username = signedJWTToken.getJWTClaimsSet().getSubject();
+        User user = userRepository.findByUsername(username).orElseThrow(
+                () -> new AppException(ErrorCode.USER_NOT_FOUND)
+        );
+        String token = generateToken(user);
+        return new AuthenticationResponse(true, token);
     }
 }

@@ -4,6 +4,7 @@ import com.nimbusds.jose.JOSEException;
 import com.tamstudio.learning.dto.request.AuthenticationRequest;
 import com.tamstudio.learning.dto.request.IntrospectRequest;
 import com.tamstudio.learning.dto.request.LogoutRequest;
+import com.tamstudio.learning.dto.request.RefreshTokenRequest;
 import com.tamstudio.learning.dto.response.ApiResponse;
 import com.tamstudio.learning.dto.response.AuthenticationResponse;
 import com.tamstudio.learning.dto.response.IntrospectResponse;
@@ -46,6 +47,14 @@ public class AuthenticationController {
 
         ApiResponse<Void> response = new ApiResponse<>();
         authenticationService.logout(logoutRequest);
+        return response;
+    }
+
+    @PostMapping("/refresh-token")
+    ApiResponse<AuthenticationResponse> logout(@RequestBody RefreshTokenRequest refreshTokenRequest) throws ParseException, JOSEException {
+
+        ApiResponse<AuthenticationResponse> response = new ApiResponse<>();
+        response.setData(authenticationService.refreshToken(refreshTokenRequest));
         return response;
     }
 
