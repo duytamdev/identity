@@ -50,6 +50,14 @@ public class AuthenticationServiceImp implements AuthenticationService {
         this.invalidatedTokenRepository = invalidatedTokenRepository;
     }
     @NonFinal
+    @Value("${jwt.valid-duration}")
+    protected Long VALID_DURATION;
+
+    @NonFinal
+    @Value("${jwt.refreshable-duration}")
+    protected Long REFRESHABLE_DURATION;
+
+    @NonFinal
     @Value("${jwt.singerKey}")
     protected String SIGNER_KEY;
 
@@ -81,29 +89,36 @@ public class AuthenticationServiceImp implements AuthenticationService {
         if (!authenticated) {
             throw new AppException(ErrorCode.AUTHENTICATION_FAILED);
         }
-        String token = generateToken(user);
-        return new AuthenticationResponse(authenticated, token);
+        String token = generateToken(user,false);
+        String refreshToken = generateToken(user,true);
+        return new AuthenticationResponse(authenticated, token,refreshToken);
     }
 
     @Override
     public void logout(LogoutRequest logoutRequest) throws ParseException, JOSEException{
-      //  invalidatedTokenRepository.save(introspectRequest);
-        var signToken = verifyToken(logoutRequest.getToken());
-        String jti = signToken.getJWTClaimsSet().getJWTID();
-        InvalidatedToken invalidatedToken = new InvalidatedToken();
-        invalidatedToken.setId(jti);
-        invalidatedToken.setExpiryDate(signToken.getJWTClaimsSet().getExpirationTime());
-        System.out.println("id: "+invalidatedToken.getId());
-        invalidatedTokenRepository.save(invalidatedToken);
+        try{
+            var signToken = verifyToken(logoutRequest.getToken());
+            String jti = signToken.getJWTClaimsSet().getJWTID();
+            InvalidatedToken invalidatedToken = new InvalidatedToken();
+            invalidatedToken.setId(jti);
+            invalidatedToken.setExpiryDate(signToken.getJWTClaimsSet().getExpirationTime());
+            System.out.println("id: "+invalidatedToken.getId());
+            invalidatedTokenRepository.save(invalidatedToken);
+        }catch (AppException e){
+            System.out.println("Token already expired");
+        }
+
     }
 
-    private String generateToken(User user) {
+    private String generateToken(User user, boolean isRefreshToken) {
         JWSHeader jwsHeader = new JWSHeader(JWSAlgorithm.HS256);
         JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
                 .subject(user.getUsername())
                 .issuer("tamstudio")
                 .issueTime(new Date())
-                .expirationTime(new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli()))
+                //.expirationTime(new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+                .expirationTime( (isRefreshToken)? new Date(Instant.now().plus(REFRESHABLE_DURATION, ChronoUnit.SECONDS).toEpochMilli())
+                        : new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
                 .claim("scope", buildScope(user))
                 .jwtID(UUID.randomUUID().toString())
                 .build();
@@ -133,7 +148,7 @@ public class AuthenticationServiceImp implements AuthenticationService {
     private SignedJWT verifyToken(String token) throws JOSEException, ParseException {
         JWSVerifier jwsVerifier = new MACVerifier(SIGNER_KEY.getBytes());
         SignedJWT signedJWT = SignedJWT.parse(token);
-        Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+        Date expirationTime =signedJWT.getJWTClaimsSet().getExpirationTime();
 
         var verified = signedJWT.verify(jwsVerifier);
         if(!(verified && expirationTime.after(new Date()))){
@@ -162,7 +177,9 @@ public class AuthenticationServiceImp implements AuthenticationService {
         User user = userRepository.findByUsername(username).orElseThrow(
                 () -> new AppException(ErrorCode.USER_NOT_FOUND)
         );
-        String token = generateToken(user);
-        return new AuthenticationResponse(true, token);
+        String token = generateToken(user,false);
+        String newRefreshToken = generateToken(user,true);
+
+        return new AuthenticationResponse(true, token, newRefreshToken);
     }
 }
